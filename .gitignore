@@ -1,0 +1,15 @@
+# Byte-compiled / virtual env
+__pycache__/
+venv/
+.env
+.env.*
+
+# Editor directories
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Docker
+*.pyc
