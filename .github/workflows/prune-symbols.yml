@@ -1,0 +1,64 @@
+name: Prune symbols
+on:
+  push:
+    paths:
+      - '.env.example'
+      - 'scripts/validate_symbols.py'
+      - '.github/workflows/prune-symbols.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install ccxt python-dotenv
+
+      - name: Validate symbols
+        run: |
+          python scripts/validate_symbols.py --env .env.example --write
+
+      - name: Read pruned
+        id: read_pruned
+        run: |
+          PRUNED=$(cat .env.example.pruned | sed 's/^SYMBOLS=//')
+          echo "pruned=$PRUNED" >> $GITHUB_OUTPUT
+
+      - name: Update bot/config.py with pruned symbols
+        run: |
+          PRUNED="${{ steps.read_pruned.outputs.pruned }}"
+          python - <<PY
+import re
+p='bot/config.py'
+with open(p,'r') as f:
+    s=f.read()
+m = re.search(r"raw\s*=\s*os\.getenv\(\s*\"SYMBOLS\"\s*,\s*\"(.*?)\"\s*\)", s, re.S)
+if m:
+    s = s.replace(m.group(0), f'raw = os.getenv(\"SYMBOLS\", \"{PRUNED}\")')
+else:
+    s = s.replace('\"BTC-USD,ETH-USD,SOL-USD,XRP-USD,XLM-USD,BTC-EUR,ETH-EUR,BTC-GBP,NEAR-USD,DOGE-USD,USDC-EUR,ZEC-USD\"', f'\"{PRUNED}\"')
+with open(p,'w') as f:
+    f.write(s)
+print('Updated bot/config.py with pruned symbols:', PRUNED)
+PY
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bot/config.py .env.example.pruned
+          git commit -m "Prune SYMBOLS via validate_symbols.py (GH Action)" || echo "No changes to commit"
+          git push origin HEAD:main
