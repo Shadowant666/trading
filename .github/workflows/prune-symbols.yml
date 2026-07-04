@@ -41,15 +41,19 @@ jobs:
         run: |
           PRUNED="${{ steps.read_pruned.outputs.pruned }}"
           python - <<PY
-import re
+import re, os
 p='bot/config.py'
 with open(p,'r') as f:
     s=f.read()
-m = re.search(r"raw\s*=\s*os\.getenv\(\s*\"SYMBOLS\"\s*,\s*\"(.*?)\"\s*\)", s, re.S)
+# Try to replace the os.getenv default symbols string
+m = re.search(r"raw\s*=\s*os\.getenv\(\"SYMBOLS\",\s*\"(.*?)\"\)", s, re.S)
 if m:
-    s = s.replace(m.group(0), f'raw = os.getenv(\"SYMBOLS\", \"{PRUNED}\")')
+    old_default = m.group(1)
+    new_default = PRUNED
+    s = s.replace(m.group(0), f'raw = os.getenv("SYMBOLS", "{new_default}")')
 else:
-    s = s.replace('\"BTC-USD,ETH-USD,SOL-USD,XRP-USD,XLM-USD,BTC-EUR,ETH-EUR,BTC-GBP,NEAR-USD,DOGE-USD,USDC-EUR,ZEC-USD\"', f'\"{PRUNED}\"')
+    # fallback: naive replace
+    s = s.replace('"BTC-USD,ETH-USD,SOL-USD,XRP-USD,XLM-USD,BTC-EUR,ETH-EUR,BTC-GBP,NEAR-USD,DOGE-USD,USDC-EUR,ZEC-USD"', f'"{PRUNED}"')
 with open(p,'w') as f:
     f.write(s)
 print('Updated bot/config.py with pruned symbols:', PRUNED)
